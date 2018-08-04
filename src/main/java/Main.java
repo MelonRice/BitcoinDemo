@@ -1,4 +1,5 @@
 import org.apache.commons.codec.binary.Hex;
+import org.bouncycastle.crypto.digests.RIPEMD160Digest;
 import org.web3j.crypto.ECKeyPair;
 import org.web3j.crypto.Keys;
 
@@ -19,10 +20,12 @@ import java.util.UUID;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
+import io.github.novacrypto.base58.Base58;
 import io.github.novacrypto.bip32.ExtendedPrivateKey;
 import io.github.novacrypto.bip32.networks.Bitcoin;
 import io.github.novacrypto.bip44.AddressIndex;
 import io.github.novacrypto.bip44.BIP44;
+import io.github.novacrypto.hashing.Sha256;
 
 import static io.github.novacrypto.toruntime.CheckedExceptionToRuntime.toRuntime;
 
@@ -83,7 +86,7 @@ public class Main {
         }
 
         //请修改文件的绝对路径
-        String path = "/Users/lhw/MelonRiceTech/BitcoinDemo/src/main/java/english";
+        String path = "src/main/java/english";
         readTextFile(path);
         StringBuilder mnemonic = new StringBuilder();
 
@@ -119,6 +122,13 @@ public class Main {
         }
     }
 
+    /**
+     * 生成以太坊私钥、公钥、地址
+     * @param mnemonic
+     * @return
+     * @throws InvalidKeySpecException
+     * @throws NoSuchAlgorithmException
+     */
     private static List<String> generateKeyPairs(String mnemonic) throws InvalidKeySpecException, NoSuchAlgorithmException {
 
         // 1. we just need eth wallet for now
@@ -153,6 +163,77 @@ public class Main {
         return returnList;
     }
 
+    /**
+     * 生成比特币私钥、公钥、地址
+     * @param mnemonic
+     * @return
+     * @throws InvalidKeySpecException
+     * @throws NoSuchAlgorithmException
+     */
+    private static List<String> generateBTCKeyPairs(String mnemonic) throws InvalidKeySpecException, NoSuchAlgorithmException {
+
+        AddressIndex addressIndex = BIP44.m().purpose44().coinType(0).account(0).external().address(0);
+        String seed;
+        String salt = "mnemonic";
+        seed = getSeed(mnemonic, salt);
+        System.out.println(seed);
+
+
+        /*
+         * 生成比特币私钥
+         */
+
+        ExtendedPrivateKey rootKey = ExtendedPrivateKey.fromSeed(fromHex(seed), Bitcoin.MAIN_NET);
+        ExtendedPrivateKey childPrivateKey = rootKey.derive(addressIndex, AddressIndex.DERIVATION);
+        // 获取比特币私钥
+        String privateKey = childPrivateKey.getPrivateKey();
+        // 加80前缀和01后缀
+        String rk = "80" + privateKey + "01";
+        // 生成校验和
+        byte[] checksum = Sha256.sha256(hexStringToByteArray(rk));
+        checksum = Sha256.sha256(checksum);
+        // 取校验和前4位（32bits）
+        String end = String.valueOf(Hex.encodeHex(checksum)).substring(0, 8);
+        rk = rk + end;
+        // 进行base58编码生成最终的私钥
+        String privateK = Base58.base58Encode(hexStringToByteArray(rk));
+
+        /*
+          生成比特币地址
+         */
+
+        // 获取比特币公钥
+        String publicKey = childPrivateKey.neuter().getPublicKey();
+
+        // 对公钥进行一次sha256
+        byte[] pk256 = hexStringToByteArray(publicKey);
+        pk256 = Sha256.sha256(pk256);
+        // 进行ripe160加密（20位）
+        RIPEMD160Digest digest = new RIPEMD160Digest();
+        digest.update(pk256, 0, pk256.length);
+        byte[] ripemd160Bytes = new byte[digest.getDigestSize()];
+        digest.doFinal(ripemd160Bytes, 0);
+        // 加00前缀（比特币主网）变成21位
+        byte[] extendedRipemd160Bytes = hexStringToByteArray("00" + String.valueOf(Hex.encodeHex(ripemd160Bytes)));
+        // 计算校验和
+        checksum = Sha256.sha256(extendedRipemd160Bytes);
+        checksum = Sha256.sha256(checksum);
+        // 加校验和前4位，变成25位
+        String pk = String.valueOf(Hex.encodeHex(extendedRipemd160Bytes)) + String.valueOf(Hex.encodeHex(checksum)).substring(0, 8);
+        // base58加密生成最终的比特币地址
+        String address = Base58.base58Encode(hexStringToByteArray(pk));
+
+
+        System.out.println("privateKey:" + privateK);
+        System.out.println("publicKey:" + publicKey);
+        System.out.println("address:" + address);
+        List<String> returnList = new ArrayList<>();
+        returnList.add(privateKey);
+        returnList.add(publicKey);
+        returnList.add(address);
+        return returnList;
+    }
+
 
     public static String getSeed(String mnemonic, String salt) throws NoSuchAlgorithmException,
             InvalidKeySpecException {
@@ -177,15 +258,25 @@ public class Main {
         return toRuntime(() -> string.getBytes("UTF-8"));
     }
 
-    private static void genKeyStore(String privateKey, String address, String password){
-        ks.genkey(address, password);
+    private static void genKeyStore(String ksContent, String ksName, String ksPassword){
+        ks.genkey(ksName, ksPassword);
         try {
             Thread.sleep(1000); //1000 毫秒，也就是1秒.
         } catch(InterruptedException ex) {
             Thread.currentThread().interrupt();
         }
-        ks.protectPrivateKey(privateKey, password);
-        ks.getPrivateKey(password);
+        ks.protectContent(ksContent, ksPassword);
+        ks.getContent(ksPassword);
+    }
+
+    public static byte[] hexStringToByteArray(String s) {
+        int len = s.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
+                + Character.digit(s.charAt(i + 1), 16));
+        }
+        return data;
     }
 }
 

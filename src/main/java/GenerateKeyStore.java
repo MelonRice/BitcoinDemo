@@ -31,20 +31,11 @@ public class GenerateKeyStore {
         }
     }
 
-    public void execCommand(String arstringCommand) {
-        try {
-            Runtime.getRuntime().exec(arstringCommand);
-
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-        }
-    }
-
     /**
      * 生成密钥
      */
     public void genkey(String address, String password) {
-        fileName = "/Users/lhw/MelonRiceTech/BitcoinDemo/keystore/" + address + ".keystore";
+        fileName = "keystore/" + address + ".keystore";
         String[] arstringCommand = new String[]{
 
                 "keytool",
@@ -72,7 +63,7 @@ public class GenerateKeyStore {
     }
 
 
-    public void protectPrivateKey(String privateKey, String password) {
+    public void protectContent(String content, String password) {
         FileInputStream fis = null;
         OutputStream os = null;
         try {
@@ -90,7 +81,7 @@ public class GenerateKeyStore {
             PrivateKey myPrivateKey = pkEntry.getPrivateKey();
             System.out.println("获取的私钥是：" + myPrivateKey.toString());
             // 根据给定的字节数组构造一个密钥
-            javax.crypto.SecretKey mySecretKey = new SecretKeySpec(privateKey.getBytes(), "JKS");
+            javax.crypto.SecretKey mySecretKey = new SecretKeySpec(content.getBytes(), "JKS");
             KeyStore.SecretKeyEntry skEntry = new KeyStore.SecretKeyEntry(mySecretKey);
             keyStore.setEntry(alias, skEntry, new KeyStore.PasswordProtection("decryp pwd".toCharArray()));
             //将此 keystore 存储到给定输出流，并用给定密码保护其完整性。
@@ -111,7 +102,7 @@ public class GenerateKeyStore {
         }
     }
 
-    public String getPrivateKey(String password) {
+    public String getContent(String password) {
         try {
             FileInputStream fis = null;
             // 读取keystore文件转换为keystore密钥库对象
@@ -126,15 +117,15 @@ public class GenerateKeyStore {
             Key key = keyStore.getKey("Mnemonic", "decryp pwd".toCharArray());
             //key.getEncoded()返回基本编码格式的密钥，如果此密钥不支持编码，则返回 null。
             byte[] bt = key.getEncoded();
-            StringBuilder privateKey = new StringBuilder();
-            System.out.println("从证书中获取的解密密码是：");
+            StringBuilder content = new StringBuilder();
+            System.out.println("从证书中获取的内容是：");
             for (byte aBt : bt) {
                 char ch = (char) aBt;
-                privateKey.append(ch);
+                content.append(ch);
                 System.out.print(ch);
             }
 
-            return privateKey.toString();
+            return content.toString();
         } catch (UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException | CertificateException | IOException e) {
             e.printStackTrace();
             System.out.println("wrong password !");
