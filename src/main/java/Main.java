@@ -29,6 +29,9 @@ import io.github.novacrypto.hashing.Sha256;
 
 import static io.github.novacrypto.toruntime.CheckedExceptionToRuntime.toRuntime;
 
+import org.bitcoinj.core.Sha256Hash;
+import org.bitcoinj.core.Utils;
+
 
 public class Main {
 
@@ -43,7 +46,7 @@ public class Main {
         String entropy = createEntropy();
         String mnemonic = generateMnemonic(entropy);
         System.out.println(mnemonic);
-        List<String> params = generateKeyPairs(mnemonic);
+        List<String> params = generateBTCKeyPairs(mnemonic);
         String password = "password";
         genKeyStore(params.get(0), params.get(2), password);
     }
@@ -231,7 +234,36 @@ public class Main {
         returnList.add(privateKey);
         returnList.add(publicKey);
         returnList.add(address);
+        //比特币隔离见证地址
+        generateSegwitAddress(address);
         return returnList;
+    }
+
+    /*
+        比特币隔离见证地址
+     */
+    private static void generateSegwitAddress(String address){
+        byte[] decoded = Utils.parseAsHexOrBase58(address);
+        // We should throw off header byte that is 0 for Bitcoin (Main)
+        byte[] pureBytes = new byte[20];
+        System.arraycopy(decoded, 1, pureBytes, 0, 20);
+        // Than we should prepend the following bytes:
+        byte[] scriptSig = new byte[pureBytes.length + 2];
+        scriptSig[0] = 0x00;
+        scriptSig[1] = 0x14;
+        System.arraycopy(pureBytes, 0, scriptSig, 2, pureBytes.length);
+        byte[] addressBytes = org.bitcoinj.core.Utils.sha256hash160(scriptSig);
+        // Here are the address bytes
+        byte[] readyForAddress = new byte[addressBytes.length + 1 + 4];
+        // prepending p2sh header:
+        readyForAddress[0] = (byte) 5;
+        System.arraycopy(addressBytes, 0, readyForAddress, 1, addressBytes.length);
+        // But we should also append check sum:
+        byte[] checkSum = Sha256Hash.hashTwice(readyForAddress, 0, addressBytes.length + 1);
+        System.arraycopy(checkSum, 0, readyForAddress, addressBytes.length + 1, 4);
+        // To get the final address:
+        String segwitAddress = Base58.base58Encode(readyForAddress);
+        System.out.println("segwit address:" + segwitAddress);
     }
 
 
